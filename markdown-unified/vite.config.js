@@ -7,6 +7,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         'markdown-unified': resolve(__dirname, 'markdown-unified.js'),
+        'markdown-unified-stream': resolve(__dirname, 'markdown-unified-stream.js'),
         'markdown-unified-webworker': resolve(__dirname, 'markdown-unified-webworker.js'),
         'worker': resolve(__dirname, 'worker.js'),
       },

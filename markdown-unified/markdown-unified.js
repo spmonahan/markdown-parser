@@ -4,7 +4,6 @@ import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
 import {unified} from 'unified'
 
-const mdWorker = new Worker('worker.js', { type: 'module' });
 const canvas = document.getElementById("canvas");
 
 const processor = unified()
