@@ -1,11 +1,14 @@
 import {visit} from 'unist-util-visit';
+import {visitParents} from 'unist-util-visit-parents'
 
 const mdWorker = new Worker('worker-ux-stream.js', { type: 'module' });
 const canvas = document.getElementById("canvas");
 
-const file = new URLSearchParams(window.location.search).get("file") || "lorem.md";
+const params = new URLSearchParams(window.location.search);
 
-let tree;
+const file = params.get("file") || "lorem.md";
+const speed = parseInt(params.get("speed") || 5);
+
 fetch(file).then(res => res.text()).then(md => {
   setTimeout(() => {
     const startTime = performance.now();
@@ -21,43 +24,37 @@ fetch(file).then(res => res.text()).then(md => {
           end: endTime,
         });
   
-        // window.tachometerResult = endTime - startTime;
-        streamUx(tree);
-        return;
+        return streamUx(value, done);
       }
-
-      // canvas.innerHTML = value;
-      tree = value;
+      
+      // streamUx(value);
     };
   }, 1000);
 });
 
-const charCount = 5;
+let isStreaming = false;
 
 const streamText = (params) => {
   const { elem, parent, text, queue, index = 0 } = params;
 
-  console.log('params', params);
-
   if (elem && parent) {
-    console.log("add elemtn");
     parent.appendChild(elem);
     const nextItem = queue.shift();
     if (!nextItem) {
-      console.log("done!");
+      isStreaming = false;
       return;
     }
 
     return streamText(nextItem);
   }
 
-  if (parent === canvas && !elem) {
+  if (text === "\n" && !elem) {
     const textNode = document.createTextNode(text);
     parent.appendChild(textNode);
 
     const nextItem = queue.shift();
     if (!nextItem) {
-      console.log("done!");
+      isStreaming = false;
       return;
     }
 
@@ -65,30 +62,51 @@ const streamText = (params) => {
   }
 
   if (index >= text.length) {
-    console.log("done with current text");
     const nextItem = queue.shift();
     if (!nextItem) {
-      console.log("done!");
+      isStreaming = false;
       return;
     }
     return streamText(nextItem);
   }
 
-  console.log("stream text");
-  let endIndex = index + charCount;
+  let endIndex = index + speed;
   if (endIndex > text.length) {
     endIndex = text.length;
   }
+
+  let textNode = params.textNode;
+  if (!textNode) {
+    textNode = document.createTextNode("");
+    parent.appendChild(textNode);
+  }
   
-  parent.textContent += text.substring(index, endIndex);
+  textNode.textContent += text.substring(index, endIndex);
   
   requestAnimationFrame(() => {
-    console.log("raf")
-    streamText({ elem, parent, text, queue, index: endIndex });
+    streamText({ elem, parent, text, textNode, queue, index: endIndex });
   });
 };
 
-const streamUx = (hastTree) => {
+let prevTree;
+const streamUx = (hastTree, done) => {
+
+  let tree = hastTree;
+  if (!prevTree) {
+    prevTree = hastTree;
+  } else {
+    prevTree = hastTree;
+    tree = {
+      ...hastTree,
+      children: hastTree.children.slice(prevTree.children.length - 1),
+    };
+  }
+
+  console.warn("----");
+  console.warn("Prev Tree", prevTree);
+  console.warn("----");
+  console.warn("Tree", tree);
+  console.warn("----");
 
   /**
    * type QueueItem = {
@@ -101,11 +119,17 @@ const streamUx = (hastTree) => {
    */
 
   const queue = [];
-
   const parents = [];
-  let prevParent;
+  let index = 0;
 
-  visit(hastTree, undefined, (node, index, parent) => {
+  visitParents(tree, undefined, (node, treeParents, /*index, parent*/) => {
+    if (!done && index === tree.length - 1) {
+      // Skip the last node -- it may be incomplete
+      return;
+    }
+
+    index++;
+
     if (!parents.length) {
       parents.push(canvas);
     }
@@ -121,18 +145,30 @@ const streamUx = (hastTree) => {
       queue,
     };
 
-    if (item.elem) {
-      prevParent = parent;
-      parents.push(item.elem);
-    } else if (prevParent !== parent) {
-      parents.pop();
+    if (node.properties && item.elem) {
+      Object.keys(node.properties).forEach(key => {
+        item.elem.setAttribute(key, node.properties[key]);
+      });
     }
+
+    if (item.elem) {
+      parents.push(item.elem);
+    } else if (treeParents.length < parents.length) {
+      parents.pop();
+      if (node.type === 'text') {
+        item.parent = parents.at(-1);
+      }
+    }
+
     queue.push(item);
     // console.log(node, index, parent);
   });
 
   console.log("----");
-  console.log(queue);
+  console.log([...queue]);
 
-  streamText(queue.shift());
+  if (!isStreaming) {
+    streamText(queue.shift());
+    isStreaming = true;
+  }
 }

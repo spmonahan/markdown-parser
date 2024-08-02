@@ -53,7 +53,9 @@ async function stream(text) {
         end: endTime,
       });
       console.log("Stream complete!");
-      postMessage({ value: null, done: true });
+      const mdast = processor.parse(md);
+      const val = processor.runSync(mdast, vfile);
+      postMessage({ value: val, done: true });
       return;
     }
 
