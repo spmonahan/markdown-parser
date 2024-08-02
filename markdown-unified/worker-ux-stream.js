@@ -10,10 +10,8 @@ const processor = unified()
   .use(remarkParse)
   .use(remarkRehype)
   .use(rehypeSanitize);
-  // .use(rehypeStringify);
 
 async function stream(text) {
-  console.log("????????");
   let md = '';
   // const textDecoder = new TextDecoder();
   // const decodeOptions = { stream: true };
@@ -81,10 +79,7 @@ async function stream(text) {
 }
 
 onmessage = (e) => {
-  console.log("onmessage?")
   stream(e.data).then(() => {
     console.log('done in worker');
   });
-  // const result = processor.processSync(e.data).toString();
-  // postMessage(result);
 };

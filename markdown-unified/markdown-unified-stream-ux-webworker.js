@@ -9,10 +9,12 @@ const params = new URLSearchParams(window.location.search);
 const file = params.get("file") || "lorem.md";
 const speed = parseInt(params.get("speed") || 5);
 
+const streamQueue = [];
+let isProcessingQueue = false;
+
 fetch(file).then(res => res.text()).then(md => {
   setTimeout(() => {
     const startTime = performance.now();
-    console.log(1)
     mdWorker.postMessage(md);
     mdWorker.onmessage = (e) => {
 
@@ -24,10 +26,25 @@ fetch(file).then(res => res.text()).then(md => {
           end: endTime,
         });
   
-        return streamUx(value, done);
+        console.log("done parsing");
+        streamQueue.push({
+          hastTree: value,
+          done
+        });
+
+        if (!isProcessingQueue) {
+          streamUx(streamQueue.shift());
+        }
+        return 
       }
       
-      // streamUx(value);
+      streamQueue.push({
+        hastTree: value,
+        done: false
+      });
+      if (!isProcessingQueue) {
+        streamUx(streamQueue.shift())
+      }
     };
   }, 1000);
 });
@@ -35,11 +52,11 @@ fetch(file).then(res => res.text()).then(md => {
 let isStreaming = false;
 
 const streamText = (params) => {
-  const { elem, parent, text, queue, index = 0 } = params;
+  const { elem, parent, text, queue, nextQueueIndex, index = 0 } = params;
 
   if (elem && parent) {
     parent.appendChild(elem);
-    const nextItem = queue.shift();
+    const nextItem = queue[nextQueueIndex];
     if (!nextItem) {
       isStreaming = false;
       return;
@@ -52,7 +69,7 @@ const streamText = (params) => {
     const textNode = document.createTextNode(text);
     parent.appendChild(textNode);
 
-    const nextItem = queue.shift();
+    const nextItem = queue[nextQueueIndex];
     if (!nextItem) {
       isStreaming = false;
       return;
@@ -62,7 +79,7 @@ const streamText = (params) => {
   }
 
   if (index >= text.length) {
-    const nextItem = queue.shift();
+    const nextItem = queue[nextQueueIndex];
     if (!nextItem) {
       isStreaming = false;
       return;
@@ -84,29 +101,26 @@ const streamText = (params) => {
   textNode.textContent += text.substring(index, endIndex);
   
   requestAnimationFrame(() => {
-    streamText({ elem, parent, text, textNode, queue, index: endIndex });
+    streamText({ elem, parent, text, textNode, queue, nextQueueIndex, index: endIndex });
   });
 };
 
 let prevTree;
-const streamUx = (hastTree, done) => {
+const queue = [];
+window.queue = queue;
+const streamUx = ({ hastTree, done }) => {
+  console.log("STREAM UX", hastTree);
 
   let tree = hastTree;
   if (!prevTree) {
     prevTree = hastTree;
   } else {
-    prevTree = hastTree;
     tree = {
       ...hastTree,
       children: hastTree.children.slice(prevTree.children.length - 1),
     };
+    prevTree = hastTree;
   }
-
-  console.warn("----");
-  console.warn("Prev Tree", prevTree);
-  console.warn("----");
-  console.warn("Tree", tree);
-  console.warn("----");
 
   /**
    * type QueueItem = {
@@ -114,21 +128,18 @@ const streamUx = (hastTree, done) => {
    *  parent: HTMLElement,
    *  text?: string,
    *  index: number,
-   *  queue: QueueItem[]
+   *  queue: QueueItem[],
+   *  nextQueueIndex: number,
    * }
    */
 
-  const queue = [];
   const parents = [];
-  let index = 0;
 
   visitParents(tree, undefined, (node, treeParents, /*index, parent*/) => {
-    if (!done && index === tree.length - 1) {
+    if (!done && node === tree.children.at(-1)) {
       // Skip the last node -- it may be incomplete
       return;
     }
-
-    index++;
 
     if (!parents.length) {
       parents.push(canvas);
@@ -143,6 +154,7 @@ const streamUx = (hastTree, done) => {
       parent: parents.at(-1),
       text: node.type === 'text' ? node.value: undefined,
       queue,
+      nextQueueIndex: queue.length + 1,
     };
 
     if (node.properties && item.elem) {
@@ -161,14 +173,16 @@ const streamUx = (hastTree, done) => {
     }
 
     queue.push(item);
-    // console.log(node, index, parent);
   });
 
-  console.log("----");
-  console.log([...queue]);
-
   if (!isStreaming) {
-    streamText(queue.shift());
+    streamText(queue[0]);
     isStreaming = true;
+  }
+
+  if (streamQueue.length) {
+    streamUx(streamQueue.shift());
+  } else {
+    isProcessingQueue = false;
   }
 }
