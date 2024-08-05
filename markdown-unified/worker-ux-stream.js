@@ -62,10 +62,16 @@ async function stream(text) {
     // example because we fake the stream.
     // md += textDecoder.decode(value, decodeOptions);
     md += value;
-    // const val = processor.processSync(md);
+    
+    const processStart = performance.now();
     const mdast = processor.parse(md);
     const val = processor.runSync(mdast, vfile);
-    // console.log("v??", val);
+    const processEnd = performance.now();
+    performance.measure('unified-process', {
+      start: processStart, 
+      end: processEnd,
+    });
+
     postMessage({ value: val, done: false });
 
     const streamEnd = performance.now();
