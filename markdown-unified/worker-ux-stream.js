@@ -22,8 +22,8 @@ async function stream(text) {
     start(controller) {
       let pos = 0;
       function push() {
-        const chunk = text.slice(pos, pos + 1000);
-        pos += 1000;
+        const chunk = text.slice(pos, pos + 250);
+        pos += 250;
         controller.enqueue(chunk);
         if (pos < text.length) {
           interval = setTimeout(push, 250);
